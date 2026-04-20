@@ -1,18 +1,31 @@
-const violationMap = new Map<string, number>();
-const bannedSessions = new Set<string>();
+type ViolationRecord = {
+  count: number;
+  banned: boolean;
+};
+
+const store = new Map<string, ViolationRecord>();
 
 export async function isBanned(sessionId: string): Promise<boolean> {
-  return bannedSessions.has(sessionId);
+  const record = store.get(sessionId);
+  return record?.banned ?? false;
 }
 
-export async function recordViolation(sessionId: string, highSeverity = false): Promise<{ banned: boolean; violationCount: number }> {
-  const nextCount = (violationMap.get(sessionId) ?? 0) + 1;
-  violationMap.set(sessionId, nextCount);
+export async function recordViolation(
+  sessionId: string,
+  highSeverity: boolean = false
+): Promise<{ banned: boolean; violationCount: number }> {
+  const current = store.get(sessionId) ?? { count: 0, banned: false };
 
-  if (highSeverity || nextCount >= 3) {
-    bannedSessions.add(sessionId);
-    return { banned: true, violationCount: nextCount };
-  }
+  const nextCount = current.count + 1;
+  const banned = highSeverity || nextCount >= 3;
 
-  return { banned: false, violationCount: nextCount };
+  store.set(sessionId, {
+    count: nextCount,
+    banned,
+  });
+
+  return {
+    banned,
+    violationCount: nextCount,
+  };
 }
