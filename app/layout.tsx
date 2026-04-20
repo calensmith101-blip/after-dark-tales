@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   title: "After Dark Tales",
   description: "Personalised fiction for late-night readers",
   manifest: "/manifest.json",
-  themeColor: "#0a0a0f",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
