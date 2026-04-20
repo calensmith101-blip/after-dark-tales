@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.afterdark.app',
   appName: 'After Dark',
   webDir: 'out',
-  bundledWebRuntime: false
 };
 
 export default config;
