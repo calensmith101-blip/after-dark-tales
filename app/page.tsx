@@ -3,25 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-const FREE_STORY_LIMIT = 3;
-const FAMILY_CODE = "sejay7167";
-const FORBIDDEN_CODE = "sejay7167";
-const FORBIDDEN_FREE_LIMIT = 3;
+// All story limits, credits, and payment gates have been removed.
+// familyUnlocked and forbiddenUnlocked are always true.
 
 const STORAGE_KEY = "adt_profiles_v2";
-const COUNT_KEY = "adt_story_count_v2";
 const SESSION_KEY = "adt_session_v2";
 const AGE_KEY = "adt_age_verified_v2";
-const FAMILY_KEY = "adt_family_unlocked_v2";
-const CREDITS_KEY = "adt_credits_v2";
 const FORBIDDEN_KEY = "adt_forbidden_unlocked_v2";
-const FORBIDDEN_COUNT_KEY = "adt_forbidden_count_v2";
-
-const CREDIT_COST: Record<string, number> = {
-  "Short (10 min)": 1,
-  "Standard (20 min)": 2,
-  "Long (30 min)": 4,
-};
 
 const MAIN_GENRES = [
   "Horror",
@@ -61,6 +49,8 @@ const FORBIDDEN_GENRES = [
   "Erotic Horror",
   "Explicit Dark Fiction",
 ];
+
+const STORY_LENGTHS = ["Short (10 min)", "Standard (20 min)", "Long (30 min)"];
 
 const STYLE_SUGGESTIONS = [
   "Slow burn and brooding...",
@@ -117,34 +107,6 @@ function saveProfiles(profiles: Profile[]) {
   } catch {}
 }
 
-function loadStoriesUsed(): number {
-  try {
-    return parseInt(localStorage.getItem(COUNT_KEY) ?? "0", 10) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function saveStoriesUsed(count: number) {
-  try {
-    localStorage.setItem(COUNT_KEY, String(count));
-  } catch {}
-}
-
-function loadCredits(): number {
-  try {
-    return parseInt(localStorage.getItem(CREDITS_KEY) ?? "0", 10) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-function saveCredits(count: number) {
-  try {
-    localStorage.setItem(CREDITS_KEY, String(count));
-  } catch {}
-}
-
 function isAgeVerified(): boolean {
   try {
     return localStorage.getItem(AGE_KEY) === "1";
@@ -156,20 +118,6 @@ function isAgeVerified(): boolean {
 function setAgeVerified() {
   try {
     localStorage.setItem(AGE_KEY, "1");
-  } catch {}
-}
-
-function isFamilyDevice(): boolean {
-  try {
-    return localStorage.getItem(FAMILY_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function unlockFamilyDevice() {
-  try {
-    localStorage.setItem(FAMILY_KEY, "1");
   } catch {}
 }
 
@@ -187,14 +135,6 @@ function unlockForbidden() {
   } catch {}
 }
 
-function loadForbiddenCount(): number {
-  try { return parseInt(localStorage.getItem(FORBIDDEN_COUNT_KEY) ?? "0", 10) || 0; } catch { return 0; }
-}
-
-function saveForbiddenCount(n: number) {
-  try { localStorage.setItem(FORBIDDEN_COUNT_KEY, String(n)); } catch {}
-}
-
 export default function HomePage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeLayer, setActiveLayer] = useState<Layer>("main");
@@ -205,22 +145,12 @@ export default function HomePage() {
   const [story, setStory] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Ready");
-  const [storiesUsed, setStoriesUsed] = useState(0);
-  const [credits, setCredits] = useState(0);
   const [ageVerified, setAgeVerifiedState] = useState(false);
-  const [familyUnlocked, setFamilyUnlocked] = useState(false);
   const [forbiddenUnlocked, setForbiddenUnlocked] = useState(false);
 
   const [showAgeGate, setShowAgeGate] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState<Profile | null>(null);
-  const [showForbiddenGate, setShowForbiddenGate] = useState(false);
-  const [showForbiddenCode, setShowForbiddenCode] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
-  const [forbiddenInput, setForbiddenInput] = useState("");
-  const [forbiddenMsg, setForbiddenMsg] = useState("");
-  const [forbiddenCount, setForbiddenCount] = useState(0);
 
   const [dobDay, setDobDay] = useState("");
   const [dobMonth, setDobMonth] = useState("");
@@ -229,9 +159,6 @@ export default function HomePage() {
 
   const [editName, setEditName] = useState("");
   const [editAvatar, setEditAvatar] = useState<string | undefined>(undefined);
-
-  const [familyInput, setFamilyInput] = useState("");
-  const [familyMsg, setFamilyMsg] = useState("");
 
   const [reportReason, setReportReason] = useState("");
   const [reportSent, setReportSent] = useState(false);
@@ -242,19 +169,12 @@ export default function HomePage() {
 
   const [stylePlaceholder, setStylePlaceholder] = useState(STYLE_SUGGESTIONS[0]);
 
-  const statusTapCount = useRef(0);
-  const statusTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const forbiddenHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setProfiles(loadProfiles());
-    setStoriesUsed(loadStoriesUsed());
-    setCredits(loadCredits());
-    setForbiddenCount(loadForbiddenCount());
     setAgeVerifiedState(isAgeVerified());
-    setFamilyUnlocked(isFamilyDevice());
     setForbiddenUnlocked(isForbiddenUnlocked());
     if (!isAgeVerified()) setShowAgeGate(true);
   }, []);
@@ -302,18 +222,9 @@ export default function HomePage() {
     utterance.rate = speechRate;
     utterance.pitch = 0.95;
     utterance.volume = 1;
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      setIsPaused(false);
-    };
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-    };
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setIsPaused(false);
-    };
+    utterance.onstart = () => { setIsSpeaking(true); setIsPaused(false); };
+    utterance.onend = () => { setIsSpeaking(false); setIsPaused(false); };
+    utterance.onerror = () => { setIsSpeaking(false); setIsPaused(false); };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -335,61 +246,6 @@ export default function HomePage() {
     window.speechSynthesis.cancel();
     setIsSpeaking(false);
     setIsPaused(false);
-  };
-
-  const handleStatusTap = () => {
-    if (familyUnlocked) return;
-    statusTapCount.current += 1;
-    if (statusTapTimer.current) clearTimeout(statusTapTimer.current);
-    statusTapTimer.current = setTimeout(() => {
-      statusTapCount.current = 0;
-    }, 2000);
-
-    if (statusTapCount.current >= 5) {
-      statusTapCount.current = 0;
-      setShowFamilyModal(true);
-    }
-  };
-
-  const submitFamilyCode = () => {
-    if (familyInput.trim().toLowerCase() === FAMILY_CODE) {
-      unlockFamilyDevice();
-      setFamilyUnlocked(true);
-      setShowFamilyModal(false);
-      setFamilyInput("");
-      setStatus("Unlimited reading enabled.");
-    } else {
-      setFamilyMsg("Incorrect code.");
-    }
-  };
-
-  const submitForbiddenCode = () => {
-    if (forbiddenInput.trim().toLowerCase() === FORBIDDEN_CODE) {
-      unlockForbidden();
-      setForbiddenUnlocked(true);
-      setShowForbiddenCode(false);
-      setForbiddenInput("");
-      setActiveLayer("forbidden");
-      setGenre("");
-      setStatus(`After Dark: Forbidden Tales unlocked — ${FORBIDDEN_FREE_LIMIT} free stories added!`);
-    } else {
-      setForbiddenMsg("Incorrect code.");
-    }
-  };
-
-  const handleForbiddenPressStart = () => {
-    forbiddenHoldTimer.current = setTimeout(() => {
-      setForbiddenInput("");
-      setForbiddenMsg("");
-      setShowForbiddenCode(true);
-    }, 2000);
-  };
-
-  const handleForbiddenPressEnd = () => {
-    if (forbiddenHoldTimer.current) {
-      clearTimeout(forbiddenHoldTimer.current);
-      forbiddenHoldTimer.current = null;
-    }
   };
 
   const persistProfiles = (nextProfiles: Profile[]) => {
@@ -434,25 +290,13 @@ export default function HomePage() {
     }
   };
 
-  const creditCost = CREDIT_COST[length] ?? 1;
-  const isFreeStory = storiesUsed < FREE_STORY_LIMIT && !familyUnlocked;
-  const hasCredits = familyUnlocked || credits >= creditCost;
-
   const generateStory = async () => {
     if (!ageVerified) {
       setShowAgeGate(true);
       return;
     }
 
-    if (activeLayer === "forbidden" && !forbiddenUnlocked) {
-      setShowForbiddenGate(true);
-      return;
-    }
-
-    if (!familyUnlocked && storiesUsed >= FREE_STORY_LIMIT && credits < creditCost) {
-      setShowPaywall(true);
-      return;
-    }
+    // No payment gate — stories generate freely
 
     try {
       setLoading(true);
@@ -471,10 +315,8 @@ export default function HomePage() {
           style: style.trim() || "Darkly atmospheric",
           length,
           comments: comments.trim(),
-          storiesUsed,
           sessionId: getOrCreateSessionId(),
           ageVerified: true,
-          familyUnlocked,
           layer: activeLayer,
         }),
       });
@@ -482,10 +324,6 @@ export default function HomePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        if (data?.error === "STORY_LIMIT_REACHED") {
-          setShowPaywall(true);
-          return;
-        }
         if (data?.error === "ACCESS_SUSPENDED") {
           setStatus("Access unavailable.");
           return;
@@ -498,18 +336,6 @@ export default function HomePage() {
         return;
       }
 
-      if (!familyUnlocked) {
-        if (isFreeStory) {
-          const nextCount = storiesUsed + 1;
-          setStoriesUsed(nextCount);
-          saveStoriesUsed(nextCount);
-        } else {
-          const nextCredits = credits - creditCost;
-          setCredits(nextCredits);
-          saveCredits(nextCredits);
-        }
-      }
-
       setStory(data.story || "No story generated.");
       setStatus("Story ready.");
     } catch {
@@ -518,8 +344,6 @@ export default function HomePage() {
       setLoading(false);
     }
   };
-
-  const freeLeft = Math.max(0, FREE_STORY_LIMIT - storiesUsed);
 
   return (
     <main className="app-shell">
@@ -548,16 +372,10 @@ export default function HomePage() {
       <div className="topbar">
         <h1 className="app-title">After Dark Tales</h1>
         <p style={{ color: "#8b7355", fontSize: "0.85rem" }}>Personalised fiction for late-night readers</p>
-        <p className="status-text" onClick={handleStatusTap} style={{ cursor: "default", userSelect: "none" }}>
+        <p className="status-text">
           Status: {status}
         </p>
-        <p className="status-text">
-          {familyUnlocked
-            ? "✨ Unlimited reading"
-            : freeLeft > 0
-              ? `✨ ${freeLeft} complimentary ${freeLeft === 1 ? "story" : "stories"} remaining`
-              : `✨ ${credits} reading credit${credits !== 1 ? "s" : ""} available`}
-        </p>
+        <p className="status-text">✨ Unlimited reading</p>
         <p style={{ marginTop: 10 }}>
           <Link className="inline-link" href="/privacy">Privacy Policy</Link>
         </p>
@@ -566,10 +384,7 @@ export default function HomePage() {
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button
           type="button"
-          onClick={() => {
-            setActiveLayer("main");
-            setGenre("");
-          }}
+          onClick={() => { setActiveLayer("main"); setGenre(""); }}
           style={{
             flex: 1,
             padding: "12px",
@@ -587,12 +402,14 @@ export default function HomePage() {
         </button>
         <button
           type="button"
-          onMouseDown={forbiddenUnlocked ? undefined : handleForbiddenPressStart}
-          onMouseUp={forbiddenUnlocked ? undefined : () => { handleForbiddenPressEnd(); setShowForbiddenGate(true); }}
-          onMouseLeave={forbiddenUnlocked ? undefined : handleForbiddenPressEnd}
-          onTouchStart={forbiddenUnlocked ? undefined : handleForbiddenPressStart}
-          onTouchEnd={forbiddenUnlocked ? undefined : (e) => { e.preventDefault(); handleForbiddenPressEnd(); setShowForbiddenGate(true); }}
-          onClick={forbiddenUnlocked ? () => { setActiveLayer("forbidden"); setGenre(""); } : undefined}
+          onClick={() => {
+            if (!forbiddenUnlocked) {
+              unlockForbidden();
+              setForbiddenUnlocked(true);
+            }
+            setActiveLayer("forbidden");
+            setGenre("");
+          }}
           style={{
             flex: 1,
             padding: "12px",
@@ -606,15 +423,11 @@ export default function HomePage() {
             fontSize: "0.9rem",
           }}
         >
-          🔥 After Dark: Forbidden Tales {!forbiddenUnlocked && "🔒"}
+          🔥 After Dark: Forbidden Tales
         </button>
       </div>
 
-      {!forbiddenUnlocked && (
-        <p style={{ textAlign: "center", fontSize: "0.72rem", color: "#4a3f30", marginTop: -10, marginBottom: 12, fontFamily: "sans-serif" }}>
-          Tap to unlock
-        </p>
-      )}
+      {activeLayer === "forbidden" && (
         <div
           style={{
             background: "rgba(159,18,57,0.08)",
@@ -628,7 +441,7 @@ export default function HomePage() {
             🔥 You are viewing the <strong>After Dark: Forbidden Tales</strong> — a more explicit adult fiction layer for verified readers.
           </p>
         </div>
-      )
+      )}
 
       <div className="profiles-section">
         <h2 style={{ fontSize: "0.9rem", color: "#4a3f30", marginBottom: 12, fontFamily: "sans-serif" }}>
@@ -672,9 +485,9 @@ export default function HomePage() {
 
         <label style={{ marginTop: 16 }}>Story Length</label>
         <div className="tag-grid" style={{ marginTop: 8 }}>
-          {Object.keys(CREDIT_COST).map((item) => (
+          {STORY_LENGTHS.map((item) => (
             <button key={item} type="button" className={`tag ${length === item ? "tag-active" : ""}`} onClick={() => setLength(item)}>
-              {item} {!familyUnlocked && freeLeft === 0 && `(${CREDIT_COST[item]} credit${CREDIT_COST[item] > 1 ? "s" : ""})`}
+              {item}
             </button>
           ))}
         </div>
@@ -684,24 +497,8 @@ export default function HomePage() {
           rows={4}
           value={comments}
           onChange={(e) => setComments(e.target.value)}
-          placeholder="Add characters, themes, settings, or details you’d like included. You can include your own name if you’d like it woven into the story."
+          placeholder="Add characters, themes, settings, or details you'd like included. You can include your own name if you'd like it woven into the story."
         />
-
-        {!familyUnlocked && freeLeft === 0 && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "10px 14px",
-              borderRadius: 10,
-              background: "rgba(212,168,83,0.06)",
-              border: "1px solid rgba(212,168,83,0.2)",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "#8b7355", fontFamily: "sans-serif" }}>
-              Reading credits available: <strong style={{ color: "#d4a853" }}>{credits}</strong> &nbsp;|&nbsp; This story costs: <strong style={{ color: "#d4a853" }}>{creditCost} credit{creditCost > 1 ? "s" : ""}</strong>
-            </p>
-          </div>
-        )}
 
         <button
           type="button"
@@ -717,13 +514,9 @@ export default function HomePage() {
         >
           {loading
             ? "✨ Writing your story..."
-            : freeLeft > 0
-              ? `✨ Create Story (${freeLeft} complimentary left)`
-              : !hasCredits
-                ? "✨ Get Reading Credits"
-                : activeLayer === "forbidden"
-                  ? "🔥 🔥 Create Forbidden Story"
-                  : "✨ Create Story"}
+            : activeLayer === "forbidden"
+              ? "🔥 Create Forbidden Story"
+              : "✨ Create Story"}
         </button>
       </div>
 
@@ -774,69 +567,6 @@ export default function HomePage() {
           </div>
         )}
       </div>
-
-      {showForbiddenGate && (
-        <div className="modal-overlay" onClick={() => setShowForbiddenGate(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: "center", fontSize: "2.5rem", marginBottom: 12 }}>🔥</div>
-            <h2 style={{ color: "#fb7185", textAlign: "center" }}>After Dark: After Dark: Forbidden Tales</h2>
-            <p style={{ color: "#8b7355", marginBottom: 8, fontSize: "0.9rem" }}>
-              After Dark: Forbidden Tales is a separately unlocked mature fiction layer containing more explicit adult content. It is strictly for adults aged 18 and over.
-            </p>
-            <p style={{ color: "#8b7355", marginBottom: 20, fontSize: "0.9rem" }}>
-              By unlocking this layer, you confirm that you are an adult and wish to access more explicit fiction.
-            </p>
-            <div style={{ background: "rgba(159,18,57,0.06)", border: "1px solid rgba(159,18,57,0.3)", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
-              <p style={{ margin: 0, color: "#fb7185", fontSize: "0.85rem", fontFamily: "sans-serif" }}>After Dark: Forbidden Tales — Unlock for A$4.99 (one-time)</p>
-              <p style={{ margin: "4px 0 0", color: "#4a3f30", fontSize: "0.8rem", fontFamily: "sans-serif" }}>Permanent access — includes {FORBIDDEN_FREE_LIMIT} free stories to start</p>
-            </div>
-            <button
-              type="button"
-              className="btn-primary"
-              style={{ background: "linear-gradient(135deg, #7f1d1d, #9f1239)" }}
-              onClick={() => {
-                unlockForbidden();
-                setForbiddenUnlocked(true);
-                setActiveLayer("forbidden");
-                setShowForbiddenGate(false);
-                alert("After Dark: Forbidden Tales unlocked. Connect your billing flow next.");
-              }}
-            >
-              🔥 Unlock After Dark: Forbidden Tales — A$4.99
-            </button>
-            <button type="button" className="btn-secondary" onClick={() => setShowForbiddenGate(false)}>
-              Maybe Later
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showPaywall && (
-        <div className="modal-overlay" onClick={() => setShowPaywall(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ color: "#d4a853" }}>{freeLeft === 0 && credits === 0 ? "Get More Stories" : "Not Enough Credits"}</h2>
-            <p style={{ color: "#8b7355", marginBottom: 20, fontSize: "0.9rem", fontFamily: "sans-serif" }}>
-              {freeLeft === 0 && credits === 0
-                ? "You’ve used your complimentary stories. Choose a story pack or a subscription to continue reading."
-                : `This story costs ${creditCost} credits. You currently have ${credits}.`}
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-              <div className="card" style={{ margin: 0, padding: "14px 16px" }}>
-                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#d4a853", fontFamily: "sans-serif" }}>Story Packs — One Time</p>
-                <p style={{ margin: 0, fontSize: "0.82rem", color: "#8b7355", fontFamily: "sans-serif" }}>5 stories — A$4.99 &nbsp;|&nbsp; 15 stories — A$9.99</p>
-              </div>
-              <div className="card" style={{ margin: 0, padding: "14px 16px", borderColor: "rgba(212,168,83,0.4)" }}>
-                <p style={{ margin: "0 0 2px", fontWeight: 600, color: "#d4a853", fontFamily: "sans-serif" }}>Monthly Reading — Best Value</p>
-                <p style={{ margin: 0, fontSize: "0.82rem", color: "#8b7355", fontFamily: "sans-serif" }}>30 stories/month — A$7.99 &nbsp;|&nbsp; 60 stories/month — A$14.99</p>
-              </div>
-            </div>
-
-            <button type="button" className="btn-primary" onClick={() => alert("Connect your Stripe, Play Billing, or App Store flow here.")}>🛒 Get Stories</button>
-            <button type="button" className="btn-secondary" onClick={() => setShowPaywall(false)}>Maybe Later</button>
-          </div>
-        </div>
-      )}
 
       {showReportModal && (
         <div className="modal-overlay" onClick={() => setShowReportModal(false)}>
@@ -918,54 +648,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
-      {showFamilyModal && (
-        <div className="modal-overlay" onClick={() => { setShowFamilyModal(false); setFamilyInput(""); setFamilyMsg(""); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Access Code</h2>
-            <label>Enter code</label>
-            <input type="password" value={familyInput} autoFocus onChange={(e) => { setFamilyInput(e.target.value); setFamilyMsg(""); }} onKeyDown={(e) => e.key === "Enter" && submitFamilyCode()} />
-            {familyMsg && <p style={{ color: "#f87171", fontSize: "0.85rem", marginTop: 8 }}>{familyMsg}</p>}
-            <div className="modal-actions">
-              <button type="button" className="btn-primary" onClick={submitFamilyCode}>Unlock</button>
-              <button type="button" className="btn-secondary" onClick={() => { setShowFamilyModal(false); setFamilyInput(""); setFamilyMsg(""); }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {showForbiddenCode && (
-        <div className="modal-overlay" onClick={() => { setShowForbiddenCode(false); setForbiddenInput(""); setForbiddenMsg(""); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ textAlign: "center", fontSize: "2rem", marginBottom: 12 }}>🔥</div>
-            <h2 style={{ color: "#fb7185" }}>After Dark: Forbidden Tales</h2>
-            <p style={{ color: "#8b7355", marginBottom: 20, fontSize: "0.9rem" }}>
-              Enter your access code to unlock Forbidden Tales and receive {FORBIDDEN_FREE_LIMIT} complimentary stories.
-            </p>
-            <label>Access Code</label>
-            <input
-              type="password"
-              value={forbiddenInput}
-              autoFocus
-              onChange={(e) => { setForbiddenInput(e.target.value); setForbiddenMsg(""); }}
-              onKeyDown={(e) => e.key === "Enter" && submitForbiddenCode()}
-              placeholder="Enter code..."
-            />
-            {forbiddenMsg && <p style={{ color: "#f87171", fontSize: "0.85rem", marginTop: 8 }}>{forbiddenMsg}</p>}
-            <div className="modal-actions">
-              <button type="button" className="btn-primary"
-                style={{ background: "linear-gradient(135deg, #7f1d1d, #9f1239)" }}
-                onClick={submitForbiddenCode}>
-                Unlock
-              </button>
-              <button type="button" className="btn-secondary"
-                onClick={() => { setShowForbiddenCode(false); setForbiddenInput(""); setForbiddenMsg(""); }}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </main>
   );
 }
