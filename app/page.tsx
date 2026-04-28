@@ -322,7 +322,8 @@ export default function HomePage() {
       const genres = activeLayer === "forbidden" ? FORBIDDEN_GENRES : MAIN_GENRES;
       const usedGenre = genre.trim() || genres[Math.floor(Math.random() * 5)];
 
-      const response = await fetch("/api/generate-story", {
+      const apiUrl = "https://after-dark-tales.vercel.app/api/generate-story";
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
