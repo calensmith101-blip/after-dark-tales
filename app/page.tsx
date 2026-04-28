@@ -11,6 +11,20 @@ const SESSION_KEY = "adt_session_v2";
 const AGE_KEY = "adt_age_verified_v2";
 const FORBIDDEN_KEY = "adt_forbidden_unlocked_v2";
 
+// Old keys from the paywall version — wiped on load so no limits carry over
+const LEGACY_KEYS = [
+  "adt_story_count_v2",
+  "adt_credits_v2",
+  "adt_family_unlocked_v2",
+  "adt_forbidden_count_v2",
+];
+
+function wipeLegacyStorage() {
+  try {
+    LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+  } catch {}
+}
+
 const MAIN_GENRES = [
   "Horror",
   "Dark Fantasy",
@@ -173,6 +187,7 @@ export default function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    wipeLegacyStorage(); // clear old story counts, credits, limits on every load
     setProfiles(loadProfiles());
     setAgeVerifiedState(isAgeVerified());
     setForbiddenUnlocked(isForbiddenUnlocked());
