@@ -4,16 +4,12 @@ import { isBanned, recordViolation } from "../../../lib/violationTracker";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const FREE_STORY_LIMIT = 3;
-
 type GenerateRequest = {
   genre: string;
   style: string;
   length: string;
   comments?: string;
-  storiesUsed?: number;
   sessionId?: string;
-  familyUnlocked?: boolean;
   ageVerified?: boolean;
   layer?: "main" | "forbidden";
 };
@@ -42,9 +38,7 @@ export async function POST(req: Request) {
       style,
       length = "Short (10 min)",
       comments,
-      storiesUsed = 0,
       sessionId = "anonymous",
-      familyUnlocked = false,
       ageVerified = false,
       layer = "main",
     } = body;
@@ -57,9 +51,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "ACCESS_SUSPENDED" }, { status: 403 });
     }
 
-    if (!familyUnlocked && storiesUsed >= FREE_STORY_LIMIT) {
-      return Response.json({ error: "STORY_LIMIT_REACHED" }, { status: 403 });
-    }
+    // Story limit and payment gate removed — unlimited generation
 
     const textToCheck = `${genre} ${style} ${comments ?? ""}`;
     const safetyResult = checkContent(textToCheck);
