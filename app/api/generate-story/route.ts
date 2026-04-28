@@ -4,6 +4,19 @@ import { isBanned, recordViolation } from "../../../lib/violationTracker";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// Capacitor Android WebViews send requests from a different origin.
+// These headers allow the POST to succeed from any origin (including the app).
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+// Android sends a preflight OPTIONS before the POST — must return 200
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: CORS_HEADERS });
+}
+
 type GenerateRequest = {
   genre: string;
   style: string;
@@ -29,7 +42,10 @@ function maxTokens(length: string): number {
 export async function POST(req: Request) {
   try {
     if (!process.env.OPENAI_API_KEY?.trim()) {
-      return Response.json({ error: "Server configuration error." }, { status: 500 });
+      return Response.json(
+        { error: "Server configuration error." },
+        { status: 500, headers: CORS_HEADERS }
+      );
     }
 
     const body: GenerateRequest = await req.json();
@@ -44,28 +60,37 @@ export async function POST(req: Request) {
     } = body;
 
     if (!ageVerified) {
-      return Response.json({ error: "AGE_VERIFICATION_REQUIRED" }, { status: 403 });
+      return Response.json(
+        { error: "AGE_VERIFICATION_REQUIRED" },
+        { status: 403, headers: CORS_HEADERS }
+      );
     }
 
     if (await isBanned(sessionId)) {
-      return Response.json({ error: "ACCESS_SUSPENDED" }, { status: 403 });
+      return Response.json(
+        { error: "ACCESS_SUSPENDED" },
+        { status: 403, headers: CORS_HEADERS }
+      );
     }
-
-    // Story limit and payment gate removed — unlimited generation
 
     const textToCheck = `${genre} ${style} ${comments ?? ""}`;
     const safetyResult = checkContent(textToCheck);
 
     if (!safetyResult.safe) {
       const { banned, violationCount } = await recordViolation(sessionId, safetyResult.highSeverity);
-      if (banned) return Response.json({ error: "ACCESS_SUSPENDED" }, { status: 403 });
+      if (banned) {
+        return Response.json(
+          { error: "ACCESS_SUSPENDED" },
+          { status: 403, headers: CORS_HEADERS }
+        );
+      }
       return Response.json(
         {
           error: "CONTENT_VIOLATION",
           message: "That content is not permitted.",
           warningsRemaining: Math.max(0, 2 - violationCount),
         },
-        { status: 400 },
+        { status: 400, headers: CORS_HEADERS }
       );
     }
 
@@ -108,9 +133,12 @@ Write the story now.`;
     });
 
     const story = response.choices[0]?.message?.content || "Sorry, no story was generated.";
-    return Response.json({ story });
+    return Response.json({ story }, { headers: CORS_HEADERS });
   } catch (error) {
     console.error("[generate-story]", error);
-    return Response.json({ error: "Something went wrong." }, { status: 500 });
+    return Response.json(
+      { error: "Something went wrong." },
+      { status: 500, headers: CORS_HEADERS }
+    );
   }
 }
