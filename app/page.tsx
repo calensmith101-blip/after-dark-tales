@@ -350,8 +350,15 @@ export default function HomePage() {
             headers: { "Content-Type": "application/json" },
             data: payload,
           });
-          setStatus(`API responded: ${res.status}`);
-          data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+          setStatus(`API status: ${res.status} | data: ${typeof res.data} | keys: ${res.data ? Object.keys(res.data).join(",") : "none"}`);
+          // Safely parse response data regardless of format
+          if (typeof res.data === "string") {
+            try { data = JSON.parse(res.data); } catch { data = { error: res.data }; }
+          } else if (res.data && typeof res.data === "object") {
+            data = res.data;
+          } else {
+            data = { error: `Empty response (status ${res.status})` };
+          }
           ok = res.status >= 200 && res.status < 300;
         } else {
           const res = await fetch(API_URL, {
