@@ -311,8 +311,6 @@ export default function HomePage() {
       return;
     }
 
-    // No payment gate — stories generate freely
-
     try {
       setLoading(true);
       setStory("");
@@ -322,57 +320,47 @@ export default function HomePage() {
       const genres = activeLayer === "forbidden" ? FORBIDDEN_GENRES : MAIN_GENRES;
       const usedGenre = genre.trim() || genres[Math.floor(Math.random() * 5)];
 
-      const API_URL = "https://after-dark-tales.vercel.app/api/generate-story";
-      const payload = {
-        genre: usedGenre,
-        style: style.trim() || "Darkly atmospheric",
-        length,
-        comments: comments.trim(),
-        sessionId: getOrCreateSessionId(),
-        ageVerified: true,
-        layer: activeLayer,
-      };
+      // Always use absolute URL — relative URLs break in Android Capacitor WebViews
+      const API_BASE_URL =
+        process.env.NEXT_PUBLIC_API_BASE_URL || "https://after-dark-tales.vercel.app";
 
-      // Uses XMLHttpRequest — reliable across all Android WebView versions
-      // Falls back to standard fetch in browser environments automatically.
-      // XHR works reliably in Android WebViews where fetch can be blocked
-      const result = await new Promise<{ ok: boolean; data: Record<string, unknown> }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", API_URL, true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        xhr.timeout = 90000;
-        xhr.onload = () => {
-          try {
-            const parsed = JSON.parse(xhr.responseText);
-            resolve({ ok: xhr.status >= 200 && xhr.status < 300, data: parsed });
-          } catch {
-            resolve({ ok: false, data: { error: `Bad response: ${xhr.responseText.slice(0, 100)}` } });
-          }
-        };
-        xhr.onerror = () => reject(new Error("Network error — check your connection"));
-        xhr.ontimeout = () => reject(new Error("Request timed out"));
-        xhr.send(JSON.stringify(payload));
+      const response = await fetch(`${API_BASE_URL}/api/generate-story`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          genre: usedGenre,
+          style: style.trim() || "Darkly atmospheric",
+          length,
+          comments: comments.trim(),
+          sessionId: getOrCreateSessionId(),
+          ageVerified: true,
+          layer: activeLayer,
+        }),
       });
 
-      if (!result.ok) {
-        if (result.data?.error === "ACCESS_SUSPENDED") {
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Story API failed:", response.status, data);
+        if (data?.error === "ACCESS_SUSPENDED") {
           setStatus("Access unavailable.");
           return;
         }
-        if (result.data?.error === "CONTENT_VIOLATION") {
-          setStatus(`Please review your request. ${result.data.warningsRemaining} warning(s) remaining.`);
+        if (data?.error === "CONTENT_VIOLATION") {
+          setStatus(`Please review your request. ${data.warningsRemaining} warning(s) remaining.`);
           return;
         }
-        setStatus(String(result.data?.error || "Something went wrong. Please try again."));
-        return;
+        throw new Error(data?.error || data?.message || "Story generation failed");
       }
 
-      setStory(String(result.data?.story || "No story generated."));
+      setStory(data.story || "No story generated.");
       setStatus("Story ready.");
     } catch (err) {
+      console.error("Android story generation error:", err);
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[generate-story] error", err);
-      setStatus(msg);
+      setStatus(`Error: ${msg}`);
     } finally {
       setLoading(false);
     }
