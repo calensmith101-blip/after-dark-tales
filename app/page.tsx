@@ -324,37 +324,51 @@ export default function HomePage() {
       const API_BASE_URL =
         process.env.NEXT_PUBLIC_API_BASE_URL || "https://after-dark-tales.vercel.app";
 
+      const requestBody = {
+        genre: usedGenre,
+        style: style.trim() || "Darkly atmospheric",
+        length,
+        comments: comments.trim(),
+        sessionId: getOrCreateSessionId(),
+        ageVerified: true,
+        layer: activeLayer,
+      };
+
+      console.log("Generate button clicked");
+      console.log("Sending request to:", `${API_BASE_URL}/api/generate-story`);
+      console.log("Request body:", requestBody);
+
       const response = await fetch(`${API_BASE_URL}/api/generate-story`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          genre: usedGenre,
-          style: style.trim() || "Darkly atmospheric",
-          length,
-          comments: comments.trim(),
-          sessionId: getOrCreateSessionId(),
-          ageVerified: true,
-          layer: activeLayer,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        console.error("Story API failed:", response.status, data);
-        if (data?.error === "ACCESS_SUSPENDED") {
+        const errorText = await response.text();
+        console.error("API response failed:", response.status, errorText);
+        let errorMsg = "Story generation failed";
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMsg = errorJson?.error || errorJson?.message || errorMsg;
+        } catch {
+          errorMsg = errorText.slice(0, 200) || errorMsg;
+        }
+        if (errorMsg === "ACCESS_SUSPENDED") {
           setStatus("Access unavailable.");
           return;
         }
-        if (data?.error === "CONTENT_VIOLATION") {
-          setStatus(`Please review your request. ${data.warningsRemaining} warning(s) remaining.`);
+        if (errorMsg === "CONTENT_VIOLATION") {
+          setStatus("Please review your request and try again.");
           return;
         }
-        throw new Error(data?.error || data?.message || "Story generation failed");
+        setStatus(`API Error ${response.status}: ${errorMsg}`);
+        return;
       }
 
+      const data = await response.json();
       setStory(data.story || "No story generated.");
       setStatus("Story ready.");
     } catch (err) {
