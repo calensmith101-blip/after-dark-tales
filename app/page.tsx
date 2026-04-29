@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { CapacitorHttp } from "@capacitor/core";
 
 // All story limits, credits, and payment gates have been removed.
 // familyUnlocked and forbiddenUnlocked are always true.
@@ -322,24 +323,49 @@ export default function HomePage() {
       const genres = activeLayer === "forbidden" ? FORBIDDEN_GENRES : MAIN_GENRES;
       const usedGenre = genre.trim() || genres[Math.floor(Math.random() * 5)];
 
-      const apiUrl = "https://after-dark-tales.vercel.app/api/generate-story";
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          genre: usedGenre,
-          style: style.trim() || "Darkly atmospheric",
-          length,
-          comments: comments.trim(),
-          sessionId: getOrCreateSessionId(),
-          ageVerified: true,
-          layer: activeLayer,
-        }),
-      });
+      const API_URL = "https://after-dark-tales.vercel.app/api/generate-story";
+      const payload = {
+        genre: usedGenre,
+        style: style.trim() || "Darkly atmospheric",
+        length,
+        comments: comments.trim(),
+        sessionId: getOrCreateSessionId(),
+        ageVerified: true,
+        layer: activeLayer,
+      };
 
-      const data = await response.json();
+      // Use CapacitorHttp (native HTTP) to bypass Android WebView network restrictions.
+      // Falls back to standard fetch in browser environments automatically.
+      let data: { story?: string; error?: string; message?: string; warningsRemaining?: number };
+      let ok = true;
 
-      if (!response.ok) {
+      try {
+        const isNative = typeof window !== "undefined" && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
+        if (isNative) {
+          const res = await CapacitorHttp.post({
+            url: API_URL,
+            headers: { "Content-Type": "application/json" },
+            data: payload,
+          });
+          data = res.data;
+          ok = res.status >= 200 && res.status < 300;
+        } else {
+          const res = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          data = await res.json();
+          ok = res.ok;
+        }
+      } catch (err) {
+        console.error("[generate-story] network error", err);
+        setStatus("Connection lost. Please try again.");
+        return;
+      }
+
+      if (!ok) {
         if (data?.error === "ACCESS_SUSPENDED") {
           setStatus("Access unavailable.");
           return;
@@ -354,8 +380,9 @@ export default function HomePage() {
 
       setStory(data.story || "No story generated.");
       setStatus("Story ready.");
-    } catch {
-      setStatus("Connection lost. Please try again.");
+    } catch (err) {
+      console.error("[generate-story] unexpected error", err);
+      setStatus("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
