@@ -342,13 +342,16 @@ export default function HomePage() {
       try {
         const isNative = typeof window !== "undefined" && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
 
+        setStatus(`Connecting... (native: ${isNative})`);
+
         if (isNative) {
           const res = await CapacitorHttp.post({
             url: API_URL,
             headers: { "Content-Type": "application/json" },
             data: payload,
           });
-          data = res.data;
+          setStatus(`API responded: ${res.status}`);
+          data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
           ok = res.status >= 200 && res.status < 300;
         } else {
           const res = await fetch(API_URL, {
@@ -360,8 +363,9 @@ export default function HomePage() {
           ok = res.ok;
         }
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         console.error("[generate-story] network error", err);
-        setStatus("Connection lost. Please try again.");
+        setStatus(`Error: ${msg}`);
         return;
       }
 
@@ -374,15 +378,16 @@ export default function HomePage() {
           setStatus(`Please review your request and try again. ${data.warningsRemaining} warning(s) remaining.`);
           return;
         }
-        setStatus("Please review your request and try again.");
+        setStatus(`API error: ${data?.error || "unknown"}`);
         return;
       }
 
       setStory(data.story || "No story generated.");
       setStatus("Story ready.");
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("[generate-story] unexpected error", err);
-      setStatus("Something went wrong. Please try again.");
+      setStatus(`Unexpected: ${msg}`);
     } finally {
       setLoading(false);
     }
