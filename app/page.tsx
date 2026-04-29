@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { CapacitorHttp } from "@capacitor/core";
 
 // All story limits, credits, and payment gates have been removed.
 // familyUnlocked and forbiddenUnlocked are always true.
@@ -334,67 +333,46 @@ export default function HomePage() {
         layer: activeLayer,
       };
 
-      // Use CapacitorHttp (native HTTP) to bypass Android WebView network restrictions.
+      // Uses XMLHttpRequest — reliable across all Android WebView versions
       // Falls back to standard fetch in browser environments automatically.
-      let data: { story?: string; error?: string; message?: string; warningsRemaining?: number };
-      let ok = true;
-
-      try {
-        const isNative = typeof window !== "undefined" && !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
-
-        setStatus(`Connecting... (native: ${isNative})`);
-
-        if (isNative) {
-          const res = await CapacitorHttp.post({
-            url: API_URL,
-            headers: { "Content-Type": "application/json" },
-            data: payload,
-          });
-          setStatus(`API status: ${res.status} | data: ${typeof res.data} | keys: ${res.data ? Object.keys(res.data).join(",") : "none"}`);
-          // Safely parse response data regardless of format
-          if (typeof res.data === "string") {
-            try { data = JSON.parse(res.data); } catch { data = { error: res.data }; }
-          } else if (res.data && typeof res.data === "object") {
-            data = res.data;
-          } else {
-            data = { error: `Empty response (status ${res.status})` };
+      // XHR works reliably in Android WebViews where fetch can be blocked
+      const result = await new Promise<{ ok: boolean; data: Record<string, unknown> }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", API_URL, true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.timeout = 90000;
+        xhr.onload = () => {
+          try {
+            const parsed = JSON.parse(xhr.responseText);
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, data: parsed });
+          } catch {
+            resolve({ ok: false, data: { error: `Bad response: ${xhr.responseText.slice(0, 100)}` } });
           }
-          ok = res.status >= 200 && res.status < 300;
-        } else {
-          const res = await fetch(API_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-          data = await res.json();
-          ok = res.ok;
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("[generate-story] network error", err);
-        setStatus(`Error: ${msg}`);
-        return;
-      }
+        };
+        xhr.onerror = () => reject(new Error("Network error — check your connection"));
+        xhr.ontimeout = () => reject(new Error("Request timed out"));
+        xhr.send(JSON.stringify(payload));
+      });
 
-      if (!ok) {
-        if (data?.error === "ACCESS_SUSPENDED") {
+      if (!result.ok) {
+        if (result.data?.error === "ACCESS_SUSPENDED") {
           setStatus("Access unavailable.");
           return;
         }
-        if (data?.error === "CONTENT_VIOLATION") {
-          setStatus(`Please review your request and try again. ${data.warningsRemaining} warning(s) remaining.`);
+        if (result.data?.error === "CONTENT_VIOLATION") {
+          setStatus(`Please review your request. ${result.data.warningsRemaining} warning(s) remaining.`);
           return;
         }
-        setStatus(`API error: ${data?.error || "unknown"}`);
+        setStatus(String(result.data?.error || "Something went wrong. Please try again."));
         return;
       }
 
-      setStory(data.story || "No story generated.");
+      setStory(String(result.data?.story || "No story generated."));
       setStatus("Story ready.");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[generate-story] unexpected error", err);
-      setStatus(`Unexpected: ${msg}`);
+      console.error("[generate-story] error", err);
+      setStatus(msg);
     } finally {
       setLoading(false);
     }
